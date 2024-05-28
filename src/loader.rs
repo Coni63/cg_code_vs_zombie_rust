@@ -46,11 +46,5 @@ pub fn load_state() -> Game {
         zombies.push(Entity::new(zombie_id, zombie_x, zombie_y));
     }
 
-    Game {
-        humans,
-        zombies,
-        ash,
-        score: 0,
-        step: 0,
-    }
+    Game::new(humans, zombies, ash)
 }

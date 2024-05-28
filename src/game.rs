@@ -7,14 +7,34 @@ pub struct Game {
     pub ash: Entity,
     pub score: i32,
     pub step: i32,
+    pub ks: [i32; 30],
 }
 
 impl Game {
+    pub fn new(humans: Vec<Entity>, zombies: Vec<Entity>, ash: Entity) -> Game {
+        let mut ks: [i32; 30] = [0; 30];
+        ks[0] = 1;
+        ks[1] = 1;
+        for i in 2..30 {
+            ks[i] = ks[i - 1] + ks[i - 2];
+        }
+        ks[0] = 0;
+        Game {
+            humans,
+            zombies,
+            ash,
+            score: 0,
+            step: 0,
+            ks,
+        }
+    }
+
     pub fn step(&mut self, action: Action) {
         let pair_human_zombie = self.move_zombies();
         self.move_ash(action);
-        self.kill_zombies();
+        let killed_zombies = self.kill_zombies();
         self.kill_humans(pair_human_zombie);
+        self.update_score(killed_zombies);
         self.step += 1;
     }
 
@@ -71,13 +91,16 @@ impl Game {
         self.ash.position = action.to_Point(&self.ash);
     }
 
-    fn kill_zombies(&mut self) {
+    fn kill_zombies(&mut self) -> i32 {
         // Tout zombie se situant dans un rayon de moins de 2000 unités est détruit.
+        let mut killed = 0;
         for zombie in self.zombies.iter_mut().filter(|zombie| zombie.alive) {
             if self.ash.sqdist(zombie) < 4000000.0 {
                 zombie.alive = false;
+                killed += 1;
             }
         }
+        killed
     }
 
     fn kill_humans(&mut self, pair_human_zombie: Vec<(i32, i32)>) {
@@ -87,6 +110,14 @@ impl Game {
                 self.humans.get_mut(human_id as usize).unwrap().alive = false;
             }
         }
+    }
+
+    fn update_score(&mut self, killed_zombies: i32) {
+        // La valeur d'un zombie tué est égal au nombre d'humains encore en vie au carré et multiplié par 10, sans inclure Ash.
+        // Si plusieurs zombies sont détruits pendant un même tour, la valeur du nème zombie tué est multiplié par le (n+2)ème terme de la suite de Fibonacci (1, 2, 3, 5, 8, etc). Vous avez donc tout intérêt à tuer un maximum de zombies dans un même tour !
+        let alive_humans = self.humans.iter().filter(|human| human.alive).count() as i32;
+        self.score +=
+            self.ks.get(killed_zombies as usize).unwrap_or(&832040) * alive_humans.pow(2) * 10;
     }
 }
 
