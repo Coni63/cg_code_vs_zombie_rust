@@ -1,7 +1,4 @@
-use crate::{
-    entity::{self, Entity},
-    point::Point,
-};
+use crate::{entity::Entity, game::Game, point::Point};
 
 pub struct Action {
     pub radius: f64,
@@ -16,10 +13,24 @@ impl Action {
         }
     }
 
-    pub fn to_Point(&self, entity: &Entity) -> Point {
+    pub fn to_point(&self, entity: &Entity) -> Point {
         Point::new(
             entity.position.x + self.radius * self.angle.cos(),
             entity.position.y + self.radius * self.angle.sin(),
         )
+    }
+}
+
+pub struct Solver {
+    pub game: Game,
+}
+
+impl Solver {
+    pub fn new(game: Game) -> Solver {
+        Solver { game }
+    }
+
+    pub fn get_action(&self) -> Action {
+        Action::new(0.0, 0.0)
     }
 }

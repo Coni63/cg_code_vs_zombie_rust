@@ -42,3 +42,14 @@ impl Debug for Entity {
         )
     }
 }
+
+impl Clone for Entity {
+    fn clone(&self) -> Self {
+        Entity {
+            id: self.id,
+            position: self.position.clone(),
+            startPosition: self.startPosition.clone(),
+            alive: self.alive,
+        }
+    }
+}

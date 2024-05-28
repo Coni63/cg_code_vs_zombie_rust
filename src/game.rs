@@ -8,6 +8,8 @@ pub struct Game {
     pub score: i32,
     pub step: i32,
     pub ks: [i32; 30],
+    pub startStep: i32,
+    pub startScore: i32,
 }
 
 impl Game {
@@ -25,13 +27,15 @@ impl Game {
             ash,
             score: 0,
             step: 0,
+            startStep: 0,
+            startScore: 0,
             ks,
         }
     }
 
-    pub fn step(&mut self, action: Action) {
+    pub fn step(&mut self, action: &Action) {
         let pair_human_zombie = self.move_zombies();
-        self.move_ash(action);
+        self.move_ash(&action);
         let killed_zombies = self.kill_zombies();
         self.kill_humans(pair_human_zombie);
         self.update_score(killed_zombies);
@@ -47,6 +51,8 @@ impl Game {
         self.humans.iter_mut().for_each(|human| human.reset());
         self.zombies.iter_mut().for_each(|zombie| zombie.reset());
         self.ash.reset();
+        self.score = self.startScore;
+        self.step = self.startStep;
     }
 
     fn move_zombies(&mut self) -> Vec<(i32, i32)> {
@@ -86,9 +92,9 @@ impl Game {
         pair_human_zombie
     }
 
-    fn move_ash(&mut self, action: Action) {
+    fn move_ash(&mut self, action: &Action) {
         // Ash se déplace vers sa cible.
-        self.ash.position = action.to_Point(&self.ash);
+        self.ash.position = action.to_point(&self.ash);
     }
 
     fn kill_zombies(&mut self) -> i32 {
@@ -138,5 +144,24 @@ impl Debug for Game {
         }
 
         Ok(())
+    }
+}
+
+impl Clone for Game {
+    fn clone(&self) -> Self {
+        let humans = self.humans.iter().map(|human| human.clone()).collect();
+        let zombies = self.zombies.iter().map(|zombie| zombie.clone()).collect();
+        let ash = self.ash.clone();
+        let ks = self.ks.clone();
+        Game {
+            humans,
+            zombies,
+            ash,
+            score: self.score,
+            step: self.step,
+            startStep: self.step,
+            startScore: self.score, // at the time of cloning, the score is the same as the start score
+            ks,
+        }
     }
 }

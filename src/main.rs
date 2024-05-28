@@ -6,15 +6,18 @@ mod solver;
 
 use game::Game;
 use loader::load_state;
-use solver::Action;
+use solver::{Action, Solver};
 
 fn main() {
     let mut game = load_state();
     println!("{:?}", game);
 
     loop {
-        let action = Action::new(0.0, 0.0);
-        game.step(action);
+        let solver = Solver::new(game.clone());
+        let action = solver.get_action();
+        game.step(&action);
+
+        println!("Action taken: {:?}", action.to_point(&game.ash));
 
         if game.is_over() {
             break;
