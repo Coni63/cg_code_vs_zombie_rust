@@ -1,4 +1,4 @@
-use crate::{game::Game, point::Point};
+use crate::{entity::Entity, game::Game};
 
 use std::io;
 
@@ -15,9 +15,9 @@ pub fn load_state() -> Game {
     let x = parse_input!(inputs[0], f64);
     let y = parse_input!(inputs[1], f64);
 
-    let ash = Point::new(x, y);
-    let mut humans: Vec<Point> = Vec::new();
-    let mut zombies: Vec<Point> = Vec::new();
+    let ash = Entity::new(0, x, y);
+    let mut humans: Vec<Entity> = Vec::new();
+    let mut zombies: Vec<Entity> = Vec::new();
 
     let mut input_line = String::new();
     io::stdin().read_line(&mut input_line).unwrap();
@@ -26,11 +26,11 @@ pub fn load_state() -> Game {
         let mut input_line = String::new();
         io::stdin().read_line(&mut input_line).unwrap();
         let inputs = input_line.split(' ').collect::<Vec<_>>();
-        // let human_id = parse_input!(inputs[0], i32);
+        let human_id = parse_input!(inputs[0], i32);
         let human_x = parse_input!(inputs[1], f64);
         let human_y = parse_input!(inputs[2], f64);
 
-        humans.push(Point::new(human_x, human_y));
+        humans.push(Entity::new(human_id, human_x, human_y));
     }
     let mut input_line = String::new();
     io::stdin().read_line(&mut input_line).unwrap();
@@ -39,11 +39,11 @@ pub fn load_state() -> Game {
         let mut input_line = String::new();
         io::stdin().read_line(&mut input_line).unwrap();
         let inputs = input_line.split(' ').collect::<Vec<_>>();
-        // let zombie_id = parse_input!(inputs[0], i32);
+        let zombie_id = parse_input!(inputs[0], i32);
         let zombie_x = parse_input!(inputs[1], f64);
         let zombie_y = parse_input!(inputs[2], f64);
 
-        zombies.push(Point::new(zombie_x, zombie_y));
+        zombies.push(Entity::new(zombie_id, zombie_x, zombie_y));
     }
 
     Game {
@@ -51,5 +51,6 @@ pub fn load_state() -> Game {
         zombies,
         ash,
         score: 0,
+        step: 0,
     }
 }
