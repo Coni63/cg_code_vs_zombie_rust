@@ -30,7 +30,8 @@ impl Solver {
         Solver { game }
     }
 
-    pub fn get_action(&self) -> Action {
+    pub fn get_action(&mut self) -> Action {
+        self.game.reset();
         Action::new(0.0, 0.0)
     }
 }

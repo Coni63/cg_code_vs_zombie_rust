@@ -5,7 +5,7 @@ use crate::point::Point;
 pub struct Entity {
     pub id: i32,
     pub position: Point,
-    pub startPosition: Point,
+    pub start_position: Point,
     pub alive: bool,
 }
 
@@ -14,13 +14,9 @@ impl Entity {
         Entity {
             id,
             position: Point::new(x, y),
-            startPosition: Point::new(x, y),
+            start_position: Point::new(x, y),
             alive: true,
         }
-    }
-
-    pub fn dist(&self, other: &Entity) -> f64 {
-        self.position.dist(&other.position)
     }
 
     pub fn sqdist(&self, other: &Entity) -> f64 {
@@ -28,8 +24,8 @@ impl Entity {
     }
 
     pub fn reset(&mut self) {
-        self.position.x = self.startPosition.x;
-        self.position.y = self.startPosition.y;
+        self.position.x = self.start_position.x;
+        self.position.y = self.start_position.y;
     }
 }
 
@@ -48,7 +44,7 @@ impl Clone for Entity {
         Entity {
             id: self.id,
             position: self.position.clone(),
-            startPosition: self.startPosition.clone(),
+            start_position: self.start_position.clone(),
             alive: self.alive,
         }
     }

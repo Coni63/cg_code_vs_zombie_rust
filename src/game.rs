@@ -8,34 +8,27 @@ pub struct Game {
     pub score: i32,
     pub step: i32,
     pub ks: [i32; 30],
-    pub startStep: i32,
-    pub startScore: i32,
+    pub start_step: i32,
+    pub start_score: i32,
 }
 
 impl Game {
     pub fn new(humans: Vec<Entity>, zombies: Vec<Entity>, ash: Entity) -> Game {
-        let mut ks: [i32; 30] = [0; 30];
-        ks[0] = 1;
-        ks[1] = 1;
-        for i in 2..30 {
-            ks[i] = ks[i - 1] + ks[i - 2];
-        }
-        ks[0] = 0;
         Game {
             humans,
             zombies,
             ash,
             score: 0,
             step: 0,
-            startStep: 0,
-            startScore: 0,
-            ks,
+            start_step: 0,
+            start_score: 0,
+            ks: Game::get_fib_array(),
         }
     }
 
     pub fn step(&mut self, action: &Action) {
         let pair_human_zombie = self.move_zombies();
-        self.move_ash(&action);
+        self.move_ash(action);
         let killed_zombies = self.kill_zombies();
         self.kill_humans(pair_human_zombie);
         self.update_score(killed_zombies);
@@ -51,8 +44,8 @@ impl Game {
         self.humans.iter_mut().for_each(|human| human.reset());
         self.zombies.iter_mut().for_each(|zombie| zombie.reset());
         self.ash.reset();
-        self.score = self.startScore;
-        self.step = self.startStep;
+        self.score = self.start_score;
+        self.step = self.start_step;
     }
 
     fn move_zombies(&mut self) -> Vec<(i32, i32)> {
@@ -125,6 +118,24 @@ impl Game {
         self.score +=
             self.ks.get(killed_zombies as usize).unwrap_or(&832040) * alive_humans.pow(2) * 10;
     }
+
+    fn get_fib_array() -> [i32; 30] {
+        // if we kill n-zombies, zwe have the sum
+        let mut ks: [i32; 30] = [0; 30];
+        let mut sumks: [i32; 30] = [0; 30];
+        ks[0] = 1;
+        ks[1] = 1;
+        for i in 2..30 {
+            ks[i] = ks[i - 1] + ks[i - 2];
+        }
+        ks[0] = 0;
+
+        for i in 1..30 {
+            sumks[i] = sumks[i - 1] + ks[i];
+        }
+
+        sumks
+    }
 }
 
 impl Debug for Game {
@@ -149,19 +160,40 @@ impl Debug for Game {
 
 impl Clone for Game {
     fn clone(&self) -> Self {
-        let humans = self.humans.iter().map(|human| human.clone()).collect();
-        let zombies = self.zombies.iter().map(|zombie| zombie.clone()).collect();
+        let humans = self.humans.to_vec();
+        let zombies = self.zombies.to_vec();
         let ash = self.ash.clone();
-        let ks = self.ks.clone();
+        let ks = self.ks;
         Game {
             humans,
             zombies,
             ash,
             score: self.score,
             step: self.step,
-            startStep: self.step,
-            startScore: self.score, // at the time of cloning, the score is the same as the start score
+            start_step: self.step,
+            start_score: self.score, // at the time of cloning, the score is the same as the start score
             ks,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn it_clones() {
+        let mut game = Game::new(
+            vec![Entity::new(0, 1500.0, 1500.0)],
+            vec![Entity::new(0, 1000.0, 1000.0)],
+            Entity::new(0, 0.0, 0.0),
+        );
+
+        let copy = game.clone();
+
+        game.step(&Action::new(0.0, 0.0));
+
+        assert_eq!(game.zombies[0].position.x, 1282.0);
+        assert_eq!(copy.zombies[0].position.x, 1000.0);
     }
 }

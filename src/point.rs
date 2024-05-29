@@ -10,10 +10,6 @@ impl Point {
         Point { x, y }
     }
 
-    pub fn dist(&self, other: &Point) -> f64 {
-        self.sqdist(other).sqrt()
-    }
-
     pub fn sqdist(&self, other: &Point) -> f64 {
         (self.x - other.x).powi(2) + (self.y - other.y).powi(2)
     }

@@ -11,7 +11,7 @@ macro_rules! parse_input {
 pub fn load_state() -> Game {
     let mut input_line = String::new();
     io::stdin().read_line(&mut input_line).unwrap();
-    let inputs = input_line.split(" ").collect::<Vec<_>>();
+    let inputs = input_line.split(' ').collect::<Vec<_>>();
     let x = parse_input!(inputs[0], f64);
     let y = parse_input!(inputs[1], f64);
 
