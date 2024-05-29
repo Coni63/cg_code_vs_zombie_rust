@@ -48,6 +48,12 @@ impl Game {
         self.step = self.start_step;
     }
 
+    pub fn possible_score(&self) -> i32 {
+        let alive_humans = self.humans.iter().filter(|human| human.alive).count() as i32;
+        let alive_zombies = self.zombies.iter().filter(|zombie| zombie.alive).count() as i32;
+        alive_zombies * alive_humans.pow(2) * 10 // consider that we kill every zombies 1 by 1 -- worse case scenario
+    }
+
     fn move_zombies(&mut self) -> Vec<(i32, i32)> {
         // Les zombies se déplacent vers leurs cibles.
         let mut pair_human_zombie: Vec<(i32, i32)> = Vec::new();
@@ -87,7 +93,10 @@ impl Game {
 
     fn move_ash(&mut self, action: &Action) {
         // Ash se déplace vers sa cible.
-        self.ash.position = action.to_point(&self.ash);
+        let mut target = action.to_point(&self.ash);
+        target.x = target.x.min(15999.0).max(0.0);
+        target.y = target.y.min(8999.0).max(0.0);
+        self.ash.position = target;
     }
 
     fn kill_zombies(&mut self) -> i32 {
