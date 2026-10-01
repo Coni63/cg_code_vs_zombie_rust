@@ -25,7 +25,7 @@ fn main() {
         let target = solver.get_action(&game, budget);
         game.step(target);
         println!(
-            "Turn {:3} -> {:5.0} {:5.0} | score {:8} | expected {:8} | humans {:2} zombies {:2} | sims {}",
+            "Turn {:3} -> {:5.0} {:5.0} | score {:8} | expected {:8} | humans {:2} zombies {:2} | sims {} accepted {}",
             game.turn,
             target.x,
             target.y,
@@ -34,6 +34,7 @@ fn main() {
             game.humans.len(),
             game.zombies.len(),
             solver.simulations,
+            solver.generations,
         );
     }
 

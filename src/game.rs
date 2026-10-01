@@ -140,17 +140,6 @@ impl Game {
         self.humans.is_empty() || self.zombies.is_empty()
     }
 
-    /// Score maximal atteignable : tous les zombies restants tués en un seul combo,
-    /// sans perdre d'humain (le combo est super-additif, les humains ne font que diminuer).
-    pub fn score_upper_bound(&self) -> i64 {
-        if self.humans.is_empty() {
-            return 0;
-        }
-        let h = self.humans.len() as i64;
-        self.score
-            .saturating_add((10 * h * h).saturating_mul(COMBO[self.zombies.len()]))
-    }
-
     pub fn final_score(&self) -> i64 {
         if self.humans.is_empty() {
             0
@@ -223,5 +212,43 @@ mod tests {
         );
         game.step(Point::new(0.0, 0.0));
         assert_eq!(game.humans.len(), 1);
+    }
+}
+
+#[cfg(test)]
+mod testcases {
+    use super::*;
+
+    #[test]
+    fn zombie_moves_match_testcases() {
+        for entry in std::fs::read_dir("testcases").unwrap() {
+            let path = entry.unwrap().path();
+            let text = std::fs::read_to_string(&path).unwrap();
+            let mut lines = text.lines().map(|l| {
+                l.split_whitespace()
+                    .map(|v| v.parse::<f64>().unwrap())
+                    .collect::<Vec<_>>()
+            });
+            let a = lines.next().unwrap();
+            let ash = Entity::new(0, a[0], a[1]);
+            let humans: Vec<Entity> = (0..lines.next().unwrap()[0] as usize)
+                .map(|_| {
+                    let h = lines.next().unwrap();
+                    Entity::new(h[0] as i32, h[1], h[2])
+                })
+                .collect();
+            let zombies: Vec<Vec<f64>> = (0..lines.next().unwrap()[0] as usize)
+                .map(|_| lines.next().unwrap())
+                .collect();
+            let game = Game::new(
+                humans,
+                zombies.iter().map(|z| Entity::new(z[0] as i32, z[1], z[2])).collect(),
+                ash,
+            );
+            for z in &zombies {
+                let (next, _) = game.zombie_next(&Point::new(z[1], z[2]));
+                assert_eq!((next.x, next.y), (z[3], z[4]), "{:?} zombie {}", path, z[0]);
+            }
+        }
     }
 }

@@ -1,50 +1,36 @@
 use crate::{entity::Entity, game::Game};
 
-use std::io;
-
-macro_rules! parse_input {
-    ($x:expr, $t:ident) => {
-        $x.trim().parse::<$t>().unwrap()
-    };
-}
+use std::io::{self, Read};
 
 pub fn load_state() -> Game {
-    let mut input_line = String::new();
-    io::stdin().read_line(&mut input_line).unwrap();
-    let inputs = input_line.split(' ').collect::<Vec<_>>();
-    let x = parse_input!(inputs[0], f64);
-    let y = parse_input!(inputs[1], f64);
+    let mut input = String::new();
+    io::stdin().read_to_string(&mut input).unwrap();
+    load_from_str(&input)
+}
 
-    let ash = Entity::new(0, x, y);
-    let mut humans: Vec<Entity> = Vec::new();
-    let mut zombies: Vec<Entity> = Vec::new();
+/// Lit l'état initial : `x y`, les humains `id x y` puis les zombies `id x y xNext yNext`.
+pub fn load_from_str(input: &str) -> Game {
+    let mut numbers = input
+        .split_whitespace()
+        .map(|v| v.parse::<f64>().unwrap());
+    let mut next = || numbers.next().unwrap();
 
-    let mut input_line = String::new();
-    io::stdin().read_line(&mut input_line).unwrap();
-    let human_count = parse_input!(input_line, i32);
-    for _ in 0..human_count as usize {
-        let mut input_line = String::new();
-        io::stdin().read_line(&mut input_line).unwrap();
-        let inputs = input_line.split(' ').collect::<Vec<_>>();
-        let human_id = parse_input!(inputs[0], i32);
-        let human_x = parse_input!(inputs[1], f64);
-        let human_y = parse_input!(inputs[2], f64);
+    let ash = Entity::new(0, next(), next());
 
-        humans.push(Entity::new(human_id, human_x, human_y));
-    }
-    let mut input_line = String::new();
-    io::stdin().read_line(&mut input_line).unwrap();
-    let zombie_count = parse_input!(input_line, i32);
-    for _ in 0..zombie_count as usize {
-        let mut input_line = String::new();
-        io::stdin().read_line(&mut input_line).unwrap();
-        let inputs = input_line.split(' ').collect::<Vec<_>>();
-        let zombie_id = parse_input!(inputs[0], i32);
-        let zombie_x = parse_input!(inputs[1], f64);
-        let zombie_y = parse_input!(inputs[2], f64);
+    let human_count = next() as usize;
+    let humans: Vec<Entity> = (0..human_count)
+        .map(|_| Entity::new(next() as i32, next(), next()))
+        .collect();
 
-        zombies.push(Entity::new(zombie_id, zombie_x, zombie_y));
-    }
+    let zombie_count = next() as usize;
+    let zombies: Vec<Entity> = (0..zombie_count)
+        .map(|_| {
+            let zombie = Entity::new(next() as i32, next(), next());
+            next(); // zombieXNext
+            next(); // zombieYNext
+            zombie
+        })
+        .collect();
 
     Game::new(humans, zombies, ash)
 }
