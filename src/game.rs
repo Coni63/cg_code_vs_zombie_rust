@@ -1,15 +1,39 @@
-use crate::{entity::Entity, solver::Action};
+use crate::{entity::Entity, point::Point};
 use std::fmt::Debug;
 
+pub const WIDTH: f64 = 16000.0;
+pub const HEIGHT: f64 = 9000.0;
+pub const ASH_SPEED: f64 = 1000.0;
+const ZOMBIE_SPEED: f64 = 400.0;
+const ASH_RANGE_SQ: f64 = 2000.0 * 2000.0;
+const MAX_ENTITIES: usize = 128;
+const NO_VICTIM: usize = usize::MAX;
+
+// COMBO[k] = somme des multiplicateurs quand k zombies meurent dans le même tour (1, 2, 3, 5, 8, ...)
+const COMBO: [i64; MAX_ENTITIES] = combo_table();
+
+const fn combo_table() -> [i64; MAX_ENTITIES] {
+    let mut table = [0i64; MAX_ENTITIES];
+    let (mut a, mut b) = (1i64, 2i64);
+    let mut k = 1;
+    while k < MAX_ENTITIES {
+        table[k] = table[k - 1].saturating_add(a);
+        let c = a.saturating_add(b);
+        a = b;
+        b = c;
+        k += 1;
+    }
+    table
+}
+
+/// Les entités mortes sont retirées des vecteurs : un humain/zombie présent est vivant.
+#[derive(Clone)]
 pub struct Game {
     pub humans: Vec<Entity>,
     pub zombies: Vec<Entity>,
     pub ash: Entity,
-    pub score: i32,
-    pub step: i32,
-    pub ks: [i32; 30],
-    pub start_step: i32,
-    pub start_score: i32,
+    pub score: i64,
+    pub turn: i32,
 }
 
 impl Game {
@@ -19,137 +43,126 @@ impl Game {
             zombies,
             ash,
             score: 0,
-            step: 0,
-            start_step: 0,
-            start_score: 0,
-            ks: Game::get_fib_array(),
+            turn: 0,
         }
     }
 
-    pub fn step(&mut self, action: &Action) {
-        let pair_human_zombie = self.move_zombies();
-        self.move_ash(action);
-        let killed_zombies = self.kill_zombies();
-        self.kill_humans(pair_human_zombie);
-        self.update_score(killed_zombies);
-        self.step += 1;
+    /// Copie `other` dans `self` en réutilisant les allocations.
+    pub fn copy_from(&mut self, other: &Game) {
+        self.humans.clear();
+        self.humans.extend_from_slice(&other.humans);
+        self.zombies.clear();
+        self.zombies.extend_from_slice(&other.zombies);
+        self.ash = other.ash;
+        self.score = other.score;
+        self.turn = other.turn;
+    }
+
+    pub fn step(&mut self, target: Point) {
+        // 1. Les zombies se déplacent vers l'humain le plus proche (Ash inclus).
+        let n = self.zombies.len();
+        let mut victims = [NO_VICTIM; MAX_ENTITIES];
+        for (i, victim) in victims.iter_mut().enumerate().take(n) {
+            let (position, target) = self.zombie_next(&self.zombies[i].position);
+            self.zombies[i].position = position;
+            *victim = target;
+        }
+
+        // 2. Ash se déplace vers sa cible.
+        self.ash.position = self.ash.position.move_toward(&target, ASH_SPEED);
+
+        // 3. Ash détruit les zombies à <= 2000 unités.
+        let mut kept = 0;
+        for i in 0..n {
+            if self.zombies[i].position.sqdist(&self.ash.position) > ASH_RANGE_SQ {
+                self.zombies[kept] = self.zombies[i];
+                victims[kept] = victims[i];
+                kept += 1;
+            }
+        }
+        let killed = n - kept;
+        self.zombies.truncate(kept);
+        if killed > 0 {
+            let h = self.humans.len() as i64;
+            self.score = self
+                .score
+                .saturating_add((10 * h * h).saturating_mul(COMBO[killed]));
+        }
+
+        // 4. Les zombies survivants mangent les humains atteints.
+        let mut eaten: u128 = 0;
+        for &victim in &victims[..kept] {
+            if victim != NO_VICTIM {
+                eaten |= 1 << victim;
+            }
+        }
+        if eaten != 0 {
+            let mut idx = 0;
+            self.humans.retain(|_| {
+                let keep = (eaten >> idx) & 1 == 0;
+                idx += 1;
+                keep
+            });
+        }
+
+        self.turn += 1;
+    }
+
+    /// Position d'un zombie après son déplacement, et l'index de l'humain qu'il atteint
+    /// (NO_VICTIM s'il n'atteint personne ou s'il atteint Ash).
+    pub fn zombie_next(&self, zombie: &Point) -> (Point, usize) {
+        let mut victim = NO_VICTIM;
+        let mut target = self.ash.position;
+        let mut min_dist = f64::MAX;
+        for (j, human) in self.humans.iter().enumerate() {
+            let d = zombie.sqdist(&human.position);
+            if d < min_dist {
+                min_dist = d;
+                victim = j;
+                target = human.position;
+            }
+        }
+        let d = zombie.sqdist(&self.ash.position);
+        if d < min_dist {
+            min_dist = d;
+            victim = NO_VICTIM;
+            target = self.ash.position;
+        }
+
+        if min_dist < ZOMBIE_SPEED * ZOMBIE_SPEED {
+            (target, victim)
+        } else {
+            (zombie.move_toward(&target, ZOMBIE_SPEED), NO_VICTIM)
+        }
     }
 
     pub fn is_over(&self) -> bool {
-        self.humans.iter().all(|human| !human.alive)
-            || self.zombies.iter().all(|zombie| !zombie.alive)
+        self.humans.is_empty() || self.zombies.is_empty()
     }
 
-    pub fn reset(&mut self) {
-        self.humans.iter_mut().for_each(|human| human.reset());
-        self.zombies.iter_mut().for_each(|zombie| zombie.reset());
-        self.ash.reset();
-        self.score = self.start_score;
-        self.step = self.start_step;
-    }
-
-    pub fn possible_score(&self) -> i32 {
-        let alive_humans = self.humans.iter().filter(|human| human.alive).count() as i32;
-        let alive_zombies = self.zombies.iter().filter(|zombie| zombie.alive).count() as i32;
-        alive_zombies * alive_humans.pow(2) * 10 // consider that we kill every zombies 1 by 1 -- worse case scenario
-    }
-
-    fn move_zombies(&mut self) -> Vec<(i32, i32)> {
-        // Les zombies se déplacent vers leurs cibles.
-        let mut pair_human_zombie: Vec<(i32, i32)> = Vec::new();
-        for zombie in self.zombies.iter_mut().filter(|zombie| zombie.alive) {
-            let ash_iter = std::iter::once(&self.ash);
-            let mut min_dist = std::f64::MAX;
-            let mut min_human = None;
-            for human in self
-                .humans
-                .iter()
-                .filter(|human| human.alive)
-                .chain(ash_iter)
-            {
-                let dist = zombie.sqdist(human);
-                if dist < min_dist {
-                    min_dist = dist;
-                    min_human = Some(human);
-                }
-            }
-
-            if let Some(human) = min_human {
-                if min_dist < 160000.0 {
-                    zombie.position.x = human.position.x;
-                    zombie.position.y = human.position.y;
-                    pair_human_zombie.push((human.id, zombie.id));
-                } else {
-                    let dx = human.position.x - zombie.position.x;
-                    let dy = human.position.y - zombie.position.y;
-                    let dist = min_dist.sqrt();
-                    zombie.position.x += (dx / dist * 400.0).floor();
-                    zombie.position.y += (dy / dist * 400.0).floor();
-                }
-            }
+    /// Score maximal atteignable : tous les zombies restants tués en un seul combo,
+    /// sans perdre d'humain (le combo est super-additif, les humains ne font que diminuer).
+    pub fn score_upper_bound(&self) -> i64 {
+        if self.humans.is_empty() {
+            return 0;
         }
-        pair_human_zombie
+        let h = self.humans.len() as i64;
+        self.score
+            .saturating_add((10 * h * h).saturating_mul(COMBO[self.zombies.len()]))
     }
 
-    fn move_ash(&mut self, action: &Action) {
-        // Ash se déplace vers sa cible.
-        let mut target = action.to_point(&self.ash);
-        target.x = target.x.min(15999.0).max(0.0);
-        target.y = target.y.min(8999.0).max(0.0);
-        self.ash.position = target;
-    }
-
-    fn kill_zombies(&mut self) -> i32 {
-        // Tout zombie se situant dans un rayon de moins de 2000 unités est détruit.
-        let mut killed = 0;
-        for zombie in self.zombies.iter_mut().filter(|zombie| zombie.alive) {
-            if self.ash.sqdist(zombie) < 4000000.0 {
-                zombie.alive = false;
-                killed += 1;
-            }
+    pub fn final_score(&self) -> i64 {
+        if self.humans.is_empty() {
+            0
+        } else {
+            self.score
         }
-        killed
-    }
-
-    fn kill_humans(&mut self, pair_human_zombie: Vec<(i32, i32)>) {
-        // Si un zombie se trouve sur un humain alors il le mange.
-        for (human_id, zombie_id) in pair_human_zombie {
-            if self.zombies.get(zombie_id as usize).unwrap().alive {
-                self.humans.get_mut(human_id as usize).unwrap().alive = false;
-            }
-        }
-    }
-
-    fn update_score(&mut self, killed_zombies: i32) {
-        // La valeur d'un zombie tué est égal au nombre d'humains encore en vie au carré et multiplié par 10, sans inclure Ash.
-        // Si plusieurs zombies sont détruits pendant un même tour, la valeur du nème zombie tué est multiplié par le (n+2)ème terme de la suite de Fibonacci (1, 2, 3, 5, 8, etc). Vous avez donc tout intérêt à tuer un maximum de zombies dans un même tour !
-        let alive_humans = self.humans.iter().filter(|human| human.alive).count() as i32;
-        self.score +=
-            self.ks.get(killed_zombies as usize).unwrap_or(&832040) * alive_humans.pow(2) * 10;
-    }
-
-    fn get_fib_array() -> [i32; 30] {
-        // if we kill n-zombies, zwe have the sum
-        let mut ks: [i32; 30] = [0; 30];
-        let mut sumks: [i32; 30] = [0; 30];
-        ks[0] = 1;
-        ks[1] = 1;
-        for i in 2..30 {
-            ks[i] = ks[i - 1] + ks[i - 2];
-        }
-        ks[0] = 0;
-
-        for i in 1..30 {
-            sumks[i] = sumks[i - 1] + ks[i];
-        }
-
-        sumks
     }
 }
 
 impl Debug for Game {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "Game: score: {} - Step: {}", self.score, self.step)?;
+        writeln!(f, "Game: score: {} - Turn: {}", self.score, self.turn)?;
         writeln!(f, "Ash: ")?;
         writeln!(f, "    {:?}", self.ash)?;
 
@@ -167,25 +180,6 @@ impl Debug for Game {
     }
 }
 
-impl Clone for Game {
-    fn clone(&self) -> Self {
-        let humans = self.humans.to_vec();
-        let zombies = self.zombies.to_vec();
-        let ash = self.ash.clone();
-        let ks = self.ks;
-        Game {
-            humans,
-            zombies,
-            ash,
-            score: self.score,
-            step: self.step,
-            start_step: self.step,
-            start_score: self.score, // at the time of cloning, the score is the same as the start score
-            ks,
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -194,15 +188,40 @@ mod tests {
     fn it_clones() {
         let mut game = Game::new(
             vec![Entity::new(0, 1500.0, 1500.0)],
-            vec![Entity::new(0, 1000.0, 1000.0)],
+            vec![Entity::new(0, 5000.0, 5000.0)],
             Entity::new(0, 0.0, 0.0),
         );
 
         let copy = game.clone();
 
-        game.step(&Action::new(0.0, 0.0));
+        game.step(Point::new(0.0, 0.0));
 
-        assert_eq!(game.zombies[0].position.x, 1282.0);
-        assert_eq!(copy.zombies[0].position.x, 1000.0);
+        assert_eq!(game.zombies[0].position.x, 4717.0);
+        assert_eq!(copy.zombies[0].position.x, 5000.0);
+    }
+
+    #[test]
+    fn it_scores_combos() {
+        assert_eq!(&COMBO[..5], &[0, 1, 3, 6, 11]);
+
+        let mut game = Game::new(
+            vec![Entity::new(0, 8000.0, 8000.0), Entity::new(1, 9000.0, 8000.0)],
+            vec![Entity::new(0, 1000.0, 1000.0), Entity::new(1, 1500.0, 1000.0)],
+            Entity::new(0, 0.0, 0.0),
+        );
+        game.step(Point::new(0.0, 0.0));
+        assert!(game.zombies.is_empty());
+        assert_eq!(game.final_score(), 10 * 4 * 3);
+    }
+
+    #[test]
+    fn zombie_reaching_ash_does_not_kill_a_human() {
+        let mut game = Game::new(
+            vec![Entity::new(0, 15000.0, 8000.0)],
+            vec![Entity::new(0, 5300.0, 5000.0)],
+            Entity::new(0, 5000.0, 5000.0),
+        );
+        game.step(Point::new(0.0, 0.0));
+        assert_eq!(game.humans.len(), 1);
     }
 }
